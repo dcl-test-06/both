@@ -1,0 +1,223 @@
+---
+title: "Bugs Dashboard"
+output: 
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+# knitr options
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r message=FALSE}
+# Libraries
+library(tidyverse)
+library(googlesheets4)
+library(knitr)
+library(yaml)
+
+# Parameters
+  # Path to self.yml
+file_self <- "data/self.yml"
+
+# Functions
+  # Convert character vector to ordered factor in numeric order
+numeric_order <- function(x) {
+  ordered(x, levels = unique(x) %>% str_sort(numeric = TRUE))
+}
+
+#===============================================================================
+
+# Read in self.yml and create necessary parameters
+self <- read_yaml(file_self)
+  # Spreadsheet key for bugs
+key_bugs <- self$sheet_key
+  # Spreadsheet key for questions summary
+key_questions_summary <- self$key_questions_summary
+
+# Read in bugs
+bugs <- 
+  key_bugs %>% 
+  read_sheet(
+    sheet = "Bugs",
+    col_types = "icccdc",
+    trim_ws = TRUE
+  ) %>% 
+  mutate_at(vars(value), replace_na, replace = 0)
+
+# Read in questions summary
+questions_summary <- 
+  key_questions_summary %>% 
+  read_sheet(col_types = "_ci")
+```
+
+## Summary
+
+```{r, message=FALSE, out.width="100%"}
+bugs %>% 
+  group_by(week, task) %>% 
+  summarize(
+    style = sum(if_else(str_detect(code, "^1-"), value, 0), na.rm = TRUE),
+    total = sum(value, na.rm = TRUE)
+  ) %>% 
+  left_join(questions_summary, by = "task") %>% 
+  summarize(
+    style = sum(style, na.rm = TRUE) / sum(n_questions, na.rm = TRUE),
+    total = sum(total, na.rm = TRUE) / sum(n_questions, na.rm = TRUE)
+  ) %>% 
+  pivot_longer(
+    cols = -week,
+    names_to = "type",
+    values_to = "bugs_per_question"
+  ) %>% 
+  ggplot(aes(week, bugs_per_question, color = type)) +
+  geom_hline(yintercept = 0) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
+  scale_color_discrete(
+    breaks = c("style", "total"),
+    labels = c("Style", "Total")
+  ) +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Bugs and kudos",
+    x = "Week",
+    y = "Average points per question",
+    color = NULL
+  )
+```
+
+`r if (10 %in% bugs$week) "## Week 10"`
+
+```{r}
+if (10 %in% bugs$week) {
+  bugs %>% 
+    filter(week == 10) %>% 
+    arrange(task, numeric_order(question), numeric_order(code)) %>% 
+    select(task, question, code, value, comment) %>% 
+    mutate_all(str_replace_na, replacement = "") %>%
+    kable()
+}
+```
+
+
+`r if (9 %in% bugs$week) "## Week 9"`
+
+```{r}
+if (9 %in% bugs$week) {
+  bugs %>% 
+    filter(week == 9) %>% 
+    arrange(task, numeric_order(question), numeric_order(code)) %>% 
+    select(task, question, code, value, comment) %>% 
+    mutate_all(str_replace_na, replacement = "") %>%
+    kable()
+}
+```
+
+
+`r if (8 %in% bugs$week) "## Week 8"`
+
+```{r}
+if (8 %in% bugs$week) {
+  bugs %>% 
+    filter(week == 8) %>% 
+    arrange(task, numeric_order(question), numeric_order(code)) %>% 
+    select(task, question, code, value, comment) %>% 
+    mutate_all(str_replace_na, replacement = "") %>%
+    kable()
+}
+```
+
+`r if (7 %in% bugs$week) "## Week 7"`
+
+```{r}
+if (7 %in% bugs$week) {
+  bugs %>% 
+    filter(week == 7) %>% 
+    arrange(task, numeric_order(question), numeric_order(code)) %>% 
+    select(task, question, code, value, comment) %>% 
+    mutate_all(str_replace_na, replacement = "") %>%
+    kable()
+}
+```
+
+`r if (6 %in% bugs$week) "## Week 6"`
+
+```{r}
+if (6 %in% bugs$week) {
+  bugs %>% 
+    filter(week == 6) %>% 
+    arrange(task, numeric_order(question), numeric_order(code)) %>% 
+    select(task, question, code, value, comment) %>% 
+    mutate_all(str_replace_na, replacement = "") %>%
+    kable()
+}
+```
+
+`r if (5 %in% bugs$week) "## Week 5"`
+
+```{r}
+if (5 %in% bugs$week) {
+  bugs %>% 
+    filter(week == 5) %>% 
+    arrange(task, numeric_order(question), numeric_order(code)) %>% 
+    select(task, question, code, value, comment) %>% 
+    mutate_all(str_replace_na, replacement = "") %>%
+    kable()
+}
+```
+
+`r if (4 %in% bugs$week) "## Week 4"`
+
+```{r}
+if (4 %in% bugs$week) {
+  bugs %>% 
+    filter(week == 4) %>% 
+    arrange(task, numeric_order(question), numeric_order(code)) %>% 
+    select(task, question, code, value, comment) %>%  
+    mutate_all(str_replace_na, replacement = "") %>%
+    kable()
+}
+```
+
+`r if (3 %in% bugs$week) "## Week 3"`
+
+```{r}
+if (3 %in% bugs$week) {
+  bugs %>% 
+    filter(week == 3) %>% 
+    arrange(task, numeric_order(question), numeric_order(code)) %>% 
+    select(task, question, code, value, comment) %>%  
+    mutate_all(str_replace_na, replacement = "") %>%
+    kable()
+}
+```
+
+`r if (2 %in% bugs$week) "## Week 2"`
+
+```{r}
+if (2 %in% bugs$week) {
+  bugs %>% 
+    filter(week == 2) %>% 
+    arrange(task, numeric_order(question), numeric_order(code)) %>% 
+    select(task, question, code, value, comment) %>%  
+    mutate_all(str_replace_na, replacement = "") %>%
+    kable()
+}
+```
+
+`r if (1 %in% bugs$week) "## Week 1"`
+
+```{r}
+if (1 %in% bugs$week) {
+  bugs %>% 
+    filter(week == 1) %>% 
+    arrange(task, numeric_order(question), numeric_order(code)) %>% 
+    select(task, question, code, value, comment) %>%  
+    mutate_all(str_replace_na, replacement = "") %>%
+    kable()
+}
+```
+

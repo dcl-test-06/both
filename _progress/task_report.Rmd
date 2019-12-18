@@ -1,0 +1,183 @@
+---
+params:
+  task: ""
+title: "`r params$task`"
+output: github_document
+---
+
+```{r include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, out.width = "100%")
+
+# Libraries
+library(tidyverse)
+library(googlesheets4)
+library(yaml)
+
+# Parameters
+  # Path to self.yml
+file_self <- "data/self.yml"
+  # File with task codes
+file_task_codes <- "../../data/utility/task_codes.yml"
+  # Thresholds
+threshold_4 <- 3.5
+threshold_3 <- 3.3
+threshold_2 <- 3.2
+threshold_1 <- 3.1
+threshold_focus <- 2.7
+
+# Functions
+  # Convert character vector to ordered factor in numeric order
+numeric_order <- function(x) {
+  factor(x, levels = unique(x) %>% str_sort(numeric = TRUE))
+}
+
+#===============================================================================
+
+# Read in self.yml and create necessary parameters
+self <- read_yaml(file_self)
+  # Anonymized number
+anon_number <- self$number
+  # URL to personal repo
+url_personal <- 
+  str_glue("https://github.com/dcl-{self$quarter}/{self$github_repo}")
+  # URL to task repo
+url_tasks <- str_glue("https://github.com/dcl-{self$quarter}/tasks")
+  # Spreadsheet key for feedback
+key_feedback <- self$key_feedback_anon
+  # Spreadsheet key for bugs
+key_bugs <- self$key_bugs_anon
+  # Spreadsheet key for notes data
+key_notes <- self$sheet_key
+
+# Read in task codes and create parts of URLs
+task_code <- str_to_lower(params$task)
+task_codes <- read_yaml(file_task_codes)
+stopifnot(task_code %in% names(task_codes))
+code_task <- str_glue("{task_code}-{task_codes[[{task_code}]]}")
+
+# Read in feedback
+feedback <- 
+  key_feedback %>% 
+  read_sheet(
+    sheet = str_to_upper(params$task),
+    col_types = "d"
+  ) %>% 
+  pivot_longer(cols = -number, names_to = "q", values_to = "comment") %>% 
+  filter(number == anon_number, q != "total") %>% 
+  select(-number) %>% 
+  mutate(
+    comment = 
+      case_when(
+        is.na(comment)             ~ "",
+        comment >= threshold_4     ~ "Wow! Wonderful!",
+        comment >= threshold_3     ~ "Outstanding work!",
+        comment >= threshold_2     ~ "Great work!",
+        comment >= threshold_1     ~ "Good work!",
+        comment > threshold_focus  ~ "",
+        TRUE                       ~ "Focus area"
+      )
+  )
+
+# Read in notes
+notes <- 
+  key_notes %>% 
+  read_sheet(sheet = "Notes")
+
+# Read in bugs
+df <- 
+  key_bugs %>%
+  read_sheet(
+    sheet = str_to_upper(params$task),
+    col_types = "c",
+    trim_ws = TRUE
+  )
+bugs <- 
+  df %>% 
+  filter(number == anon_number) %>% 
+  select(-number, -starts_with("X")) %>% 
+  pivot_longer(
+    cols = everything(),
+    names_to = "q",
+    values_to = "code",
+    values_drop_na = TRUE
+  )
+if (nrow(bugs) > 0) {
+  bugs <- 
+    bugs %>% 
+    separate_rows(code, sep = "\\s*[, ]\\s*") %>%
+    mutate_all(str_trim)
+}
+comments <- 
+  df %>% 
+  select_at(vars(1:4)) %>% 
+  set_names(nm = c("number", "code", "value", "comment")) %>% 
+  filter(is.na(number), !is.na(code)) %>% 
+  select(-number)
+
+# Combine bugs and comments
+bugs_comments <- 
+  feedback %>% 
+  select(-comment) %>% 
+  left_join(bugs, by = "q") %>% 
+  left_join(comments, by = "code") %>% 
+  mutate_at(vars(q), numeric_order) %>% 
+  mutate_at(vars(-q), replace_na, replace = "") %>%
+  arrange(q, numeric_order(code))
+```
+
+## Solutions
+
+* [Your solution](`r str_glue("{url_personal}/blob/master/{code_task}/{code_task}.md")`)
+* [DCL solution](`r str_glue("{url_tasks}/blob/master/{code_task}/solution.md")`)
+
+`r if (any(!feedback$comment %in% c("", "Focus area"))) "## Kudos"`
+
+```{r}
+if (any(!feedback$comment %in% c("", "Focus area"))) {
+  feedback %>% 
+    filter(!feedback$comment %in% c("", "Focus area")) %>% 
+    knitr::kable(align = "ll")
+}
+```
+
+`r if (any(feedback$comment %in% c("Focus area"))) "## Focus areas"`
+
+```{r}
+if (any(feedback$comment %in% c("Focus area"))) {
+  feedback %>% 
+    filter(feedback$comment %in% c("Focus area")) %>% 
+    select(q) %>% 
+    knitr::kable(align = "l")
+}
+```
+
+## Bugs
+
+```{r}
+bugs_comments %>% 
+  knitr::kable(align = "llll")
+```
+
+## Notes on task
+
+```{r}
+notes %>% 
+  filter(str_detect(note, str_glue("^{str_to_upper(params$task)}"))) %>% 
+  select(-note) %>% 
+  pivot_longer(
+    cols = everything(),
+    names_to = "notes",
+    values_to = "status"
+  ) %>% 
+  mutate(
+    notes = str_replace(notes, "timestamp_", "Part "),
+    status =
+      case_when(
+        !is.na(status)                      ~ "Done",
+        (notes == "Part 1") & is.na(status) ~ "{self$link_notes_1}",
+        (notes == "Part 2") & is.na(status) ~ "{self$link_notes_2}",
+        TRUE                                ~ "Error"
+      )
+  ) %>% 
+  knitr::kable()
+```

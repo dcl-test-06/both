@@ -1,0 +1,148 @@
+---
+title: "Notes Dashboard"
+output: 
+  github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+# knitr options
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r message=FALSE}
+# Libraries
+library(tidyverse)
+library(googlesheets4)
+library(knitr)
+library(yaml)
+
+# Parameters
+  # Path to self.yml
+file_self <- "data/self.yml"
+
+#===============================================================================
+
+# Read in self.yml and create necessary parameters
+self <- read_yaml(file_self)
+  # Anonymize number
+anon <- self$number
+  # Spreadsheet key for notes data
+key_notes <- self$sheet_key
+  # Spreadsheet key for summary notes data for team
+key_notes_team <- self$key_notes_summary_anon
+
+# Read in notes data
+notes <- 
+  key_notes %>%
+  read_sheet(sheet = "Notes") %>% 
+  mutate_all(str_replace_na, replacement = "")
+
+# Read in summary notes data for team
+notes_team <- 
+  key_notes_team %>%
+  read_sheet() %>% 
+  mutate(mean_note_delay = parse_number(mean_note_delay) / 86400)
+```
+
+## Links
+
+* `r self$link_notes_1 %>% str_replace(".*\\[", "\\[") %>% str_remove("\\.$")`
+* `r self$link_notes_2 %>% str_replace(".*\\[", "\\[") %>% str_remove("\\.$")`
+* `r self$link_notes_week`
+
+## Team
+
+```{r}
+notes_team %>% 
+  ggplot(aes(mean_note_delay, prop_completed)) + 
+  geom_point(color = "grey60") +
+  geom_point(color = "red", data = notes_team %>% filter(number == anon)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    x = "Mean delay for completed notes (days)",
+    y = "Proportion complete",
+    title = "Notes summary"
+  )
+```
+
+
+## Summary
+
+```{r}
+left_join(
+  tribble(
+    ~note, ~notes,
+    "W", "Weeks",
+    "C", "Challenges",
+    "E", "Exercises"
+  ),
+  notes %>%
+  transmute(
+    note = str_sub(note, 1, 1),
+    completed = (timestamp_1 != "") + (timestamp_2 != "")
+  ) %>% 
+  filter(note %in% c("C", "E", "W")) %>%
+  group_by(note) %>%
+  summarize(
+    completed = sum(completed),
+    total = n()
+  ),
+  by = "note"
+) %>% 
+  mutate(
+    total = total * case_when(
+      note %in% c("C", "E") ~ 2,
+      TRUE ~ 1
+    )
+  ) %>% 
+  select(-note) %>% 
+  mutate_all(str_replace_na, replacement = "") %>%
+  kable()
+```
+
+## Notes for weeks
+
+```{r}
+v <- 
+  notes %>%
+  filter(str_detect(note, "^W")) %>% 
+  transmute(
+    note,
+    time = timestamp_1
+  ) %>% 
+  slice(str_order(note, numeric = TRUE)) %>% 
+  mutate_all(str_replace_na, replacement = "")
+if (nrow(v) > 0) kable(v)
+```
+
+## Notes for challenges
+
+```{r}
+v <- 
+  notes %>%
+  filter(str_detect(note, "^C")) %>% 
+  rename(
+    time_part_1 = timestamp_1,
+    time_part_2 = timestamp_2
+  ) %>% 
+  arrange(note) %>% 
+  mutate_all(str_replace_na, replacement = "")
+if (nrow(v) > 0) kable(v)
+```
+
+## Notes for exercises
+
+```{r}
+v <- 
+  notes %>%
+  filter(str_detect(note, "^E")) %>% 
+  rename(
+    time_part_1 = timestamp_1,
+    time_part_2 = timestamp_2
+  ) %>% 
+  arrange(note) %>% 
+  mutate_all(str_replace_na, replacement = "")
+if (nrow(v) > 0) kable(v)
+```
+
